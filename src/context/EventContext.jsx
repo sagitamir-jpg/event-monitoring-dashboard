@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
+import eventService from '../services/eventService'
+import base44Service from '../services/base44Service'
 
 const EventContext = createContext()
 
@@ -11,8 +13,10 @@ export const useEventContext = () => {
 }
 
 export const EventProvider = ({ children, currentUser = 'User1' }) => {
+  // Create user-specific localStorage keys
   const getUserKey = (key) => `kiro-${currentUser}-${key}`
   
+  // Load saved data from localStorage on startup (user-specific)
   const loadSavedData = () => {
     try {
       const saved = localStorage.getItem(getUserKey('preferences'))
@@ -76,8 +80,37 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
   const [settings, setSettings] = useState(loadSavedData())
   const [saveHistory, setSaveHistory] = useState([])
   const [wishListKeywords, setWishListKeywordsState] = useState(loadWishListKeywords())
+  const [events, setEvents] = useState([])
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false)
+  const [lastEventUpdate, setLastEventUpdate] = useState(null)
 
-  const [events] = useState([
+  // Load real events when settings change
+  useEffect(() => {
+    const loadRealEvents = async () => {
+      if (!settings.homeAddress) {
+        // Show demo events if no address configured
+        setEvents(getDemoEvents())
+        return
+      }
+
+      setIsLoadingEvents(true)
+      try {
+        const realEvents = await eventService.getAllEvents(settings)
+        setEvents(realEvents)
+        setLastEventUpdate(new Date())
+      } catch (error) {
+        console.error('Failed to load real events:', error)
+        setEvents(getDemoEvents())
+      } finally {
+        setIsLoadingEvents(false)
+      }
+    }
+
+    loadRealEvents()
+  }, [settings.homeAddress, settings.searchRadius, settings.interestTags, settings.freeTextSearch])
+
+  // Demo events for when APIs aren't configured
+  const getDemoEvents = () => [
     {
       id: 1,
       name: 'Tech Conference 2024',
@@ -176,7 +209,23 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
       location: 'Tel Aviv Innovation Center',
       isHidden: false
     }
-  ])
+  ]
+
+  // Refresh events manually
+  const refreshEvents = async () => {
+    if (!settings.homeAddress) return
+    
+    setIsLoadingEvents(true)
+    try {
+      const realEvents = await eventService.getAllEvents(settings)
+      setEvents(realEvents)
+      setLastEventUpdate(new Date())
+    } catch (error) {
+      console.error('Failed to refresh events:', error)
+    } finally {
+      setIsLoadingEvents(false)
+    }
+  }
 
   const [hiddenEvents, setHiddenEvents] = useState(() => {
     try {
@@ -187,6 +236,7 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     }
   })
 
+  // Filter events to show only future events and not hidden
   const getFutureEvents = () => {
     const now = new Date()
     return events.filter(event => 
@@ -210,6 +260,7 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
   const setWishListKeywords = (keywords) => {
     setWishListKeywordsState(keywords)
     
+    // Update localStorage when wish list changes
     const currentPrefs = localStorage.getItem(getUserKey('preferences'))
     if (currentPrefs) {
       const prefs = JSON.parse(currentPrefs)
@@ -221,9 +272,9 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
   }
 
   const updateSettings = async (newSettings) => {
-    console.log('🔄 Starting updateSettings...')
     setSettings(newSettings)
     
+    // Save to user-specific localStorage key
     const preferences = {
       lastUpdated: new Date().toISOString(),
       homeAddress: newSettings.homeAddress,
@@ -252,27 +303,25 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     console.log(`✅ Saved to localStorage for ${currentUser}:`, preferences)
     
     // 🔄 AUTO-SYNC TO BASE44
-    console.log('🔄 Auto-syncing to Base44...')
     try {
-      const response = await fetch('https://app.base44.com/apps/69573a88918e265269827fe9/editor/preview/EventMonitoring', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer f90220f746cb49a0bfbf914e4c78bd91',
-          'X-API-Key': 'f90220f746cb49a0bfbf914e4c78bd91'
-        },
-        body: JSON.stringify(preferences)
-      })
-
-      if (response.ok) {
-        console.log('✅ Successfully synced to Base44!')
+      console.log('🔄 Starting Base44 auto-sync...')
+      const syncResult = await base44Service.syncToBase44(newSettings, currentUser)
+      if (syncResult.success) {
+        console.log(`✅ Auto-synced to Base44 via ${syncResult.method}`)
+        if (syncResult.endpoint) {
+          console.log(`🎯 Working endpoint: ${syncResult.endpoint}`)
+        }
       } else {
-        console.warn('⚠️ Base44 sync failed:', response.status, response.statusText)
+        console.warn(`⚠️ Base44 sync failed: ${syncResult.message || syncResult.error}`)
+        if (syncResult.testedEndpoints) {
+          console.log('🔍 Tested endpoints:', syncResult.testedEndpoints)
+        }
       }
     } catch (error) {
-      console.error('❌ Base44 sync error:', error)
+      console.error('❌ Base44 auto-sync error:', error)
     }
     
+    // Add to save history
     const saveRecord = {
       id: Date.now(),
       timestamp: new Date().toLocaleString(),
@@ -352,7 +401,10 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     deleteSaveRecord,
     hideEvent,
     unhideEvent,
-    hiddenEvents
+    hiddenEvents,
+    isLoadingEvents,
+    lastEventUpdate,
+    refreshEvents
   }
 
   return (
