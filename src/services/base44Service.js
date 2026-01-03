@@ -39,52 +39,41 @@ class Base44Service {
         webhookSecret: 'SagiEventMonitor2026'
       }
 
-      // 🎯 TEST MULTIPLE BASE44 ENDPOINTS
-      const base44AppUrl = 'https://event-scout-69827fe9.base44.app'
-      const testEndpoints = [
-        `${base44AppUrl}/api/update`,
-        `${base44AppUrl}/webhook`,
-        `${base44AppUrl}/data`,
-        `${base44AppUrl}/api/data`,
-        `${base44AppUrl}/sync`,
-        `${base44AppUrl}/`
-      ]
-
-      console.log('🔍 Testing Base44 endpoints...')
+      // 🎯 USE BASE44 KIRO WEBHOOK ENDPOINT
+      const kiroWebhookUrl = 'https://event-scout-69827fe9.base44.app/api/functions/kiroWebhook'
       
-      for (const endpoint of testEndpoints) {
-        try {
-          console.log(`🧪 Testing: ${endpoint}`)
-          
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer f90220f746cb49a0bfbf914e4c78bd91`,
-              'X-API-Key': 'f90220f746cb49a0bfbf914e4c78bd91'
-            },
-            body: JSON.stringify(base44Data)
-          })
+      console.log('🔗 Sending to Base44 Kiro Webhook...')
+      
+      try {
+        console.log(`🧪 Testing: ${kiroWebhookUrl}`)
+        
+        const response = await fetch(kiroWebhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Secret': 'SagiEventMonitor2026'
+          },
+          body: JSON.stringify(base44Data)
+        })
 
-          console.log(`📊 ${endpoint} → Status: ${response.status}`)
-          
-          if (response.ok) {
-            console.log(`✅ SUCCESS! Base44 endpoint found: ${endpoint}`)
-            return { 
-              success: true, 
-              method: 'Base44 API',
-              endpoint: endpoint,
-              status: response.status
-            }
+        console.log(`📊 ${kiroWebhookUrl} → Status: ${response.status}`)
+        
+        if (response.ok) {
+          console.log(`✅ SUCCESS! Base44 Kiro Webhook working!`)
+          return { 
+            success: true, 
+            method: 'Base44 Kiro Webhook',
+            endpoint: kiroWebhookUrl,
+            status: response.status
           }
-          
-          // Log response for debugging
-          const responseText = await response.text()
-          console.log(`📝 Response from ${endpoint}:`, responseText.substring(0, 200))
-          
-        } catch (error) {
-          console.log(`❌ ${endpoint} failed:`, error.message)
         }
+        
+        // Log response for debugging
+        const responseText = await response.text()
+        console.log(`📝 Response from webhook:`, responseText.substring(0, 200))
+        
+      } catch (error) {
+        console.log(`❌ Kiro webhook failed:`, error.message)
       }
 
       // Method 2: Use environment variables if set
@@ -130,13 +119,13 @@ class Base44Service {
       }
 
       // Method 4: Fallback - show manual copy instructions
-      console.warn('⚠️ No working Base44 endpoint found - manual copy required')
-      console.log('💡 Check F12 console above to see which endpoints were tested')
+      console.warn('⚠️ Base44 Kiro Webhook not working - manual copy required')
+      console.log('💡 Tried webhook endpoint: https://event-scout-69827fe9.base44.app/api/functions/kiroWebhook')
       return { 
         success: false, 
         method: 'Manual',
-        message: 'No working Base44 API endpoint found. Please copy JSON from Developer tab to Base44 manually.',
-        testedEndpoints: testEndpoints
+        message: 'Base44 Kiro Webhook not responding. Please copy JSON from Developer tab to Base44 manually.',
+        testedEndpoint: kiroWebhookUrl
       }
 
     } catch (error) {
