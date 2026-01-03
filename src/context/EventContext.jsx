@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
+import eventService from '../services/eventService'
+import base44Service from '../services/base44Service'
 
 const EventContext = createContext()
 
@@ -224,7 +226,7 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     }
   }
 
-  const updateSettings = (newSettings) => {
+  const updateSettings = async (newSettings) => {
     setSettings(newSettings)
     
     // Save to user-specific localStorage key
@@ -254,6 +256,18 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     
     localStorage.setItem(getUserKey('preferences'), JSON.stringify(preferences))
     console.log(`✅ Saved to localStorage for ${currentUser}:`, preferences)
+    
+    // 🔄 AUTO-SYNC TO BASE44
+    try {
+      const syncResult = await base44Service.syncToBase44(newSettings, currentUser)
+      if (syncResult.success) {
+        console.log(`✅ Auto-synced to Base44 via ${syncResult.method}`)
+      } else {
+        console.warn(`⚠️ Base44 sync failed: ${syncResult.message || syncResult.error}`)
+      }
+    } catch (error) {
+      console.error('❌ Base44 auto-sync error:', error)
+    }
     
     // Add to save history
     const saveRecord = {
@@ -323,7 +337,7 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
 
   const value = {
     settings,
-    events: getFutureEvents(), // Only return future events
+    events: getFutureEvents(),
     wishListKeywords,
     saveHistory,
     updateSettings,
