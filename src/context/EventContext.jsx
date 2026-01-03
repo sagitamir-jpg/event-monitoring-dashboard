@@ -1,6 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import eventService from '../services/eventService'
-import base44Service from '../services/base44Service'
+import React, { createContext, useContext, useState } from 'react'
 
 const EventContext = createContext()
 
@@ -226,6 +224,61 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     }
   }
 
+  // AUTO-SYNC TO BASE44 FUNCTION
+  const syncToBase44 = async (userSettings, currentUser) => {
+    try {
+      console.log('🔄 Auto-syncing to Base44...')
+      
+      const base44Data = {
+        user: currentUser,
+        lastUpdated: new Date().toISOString(),
+        homeAddress: userSettings.homeAddress,
+        searchRadius: userSettings.searchRadius,
+        interestTags: userSettings.interestTags,
+        monitorUrls: userSettings.monitorUrls,
+        emailAddress: userSettings.emailAddress,
+        phoneNumber: userSettings.phoneNumber,
+        notificationMethod: userSettings.notificationMethod,
+        smsForAllEvents: userSettings.smsForAllEvents,
+        smsForWishListOnly: userSettings.smsForWishListOnly,
+        urgentSmsNotifications: userSettings.urgentSmsNotifications,
+        emailDailyDigest: userSettings.emailDailyDigest,
+        emailInstantAlerts: userSettings.emailInstantAlerts,
+        emailWeeklyReport: userSettings.emailWeeklyReport,
+        distanceUnit: userSettings.distanceUnit,
+        customCategories: userSettings.customCategories,
+        freeTextSearch: userSettings.freeTextSearch,
+        wishListKeywords: wishListKeywords,
+        apiKey: 'f90220f746cb49a0bfbf914e4c78bd91',
+        webhookSecret: 'SagiEventMonitor2026'
+      }
+
+      const apiUrl = 'https://app.base44.com/apps/69573a88918e265269827fe9/editor/preview/EventMonitoring'
+      const apiKey = 'f90220f746cb49a0bfbf914e4c78bd91'
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'X-API-Key': apiKey
+        },
+        body: JSON.stringify(base44Data)
+      })
+
+      if (response.ok) {
+        console.log('✅ Successfully synced to Base44!')
+        return { success: true }
+      } else {
+        console.warn('⚠️ Base44 sync failed:', response.status)
+        return { success: false, error: `HTTP ${response.status}` }
+      }
+    } catch (error) {
+      console.error('❌ Base44 sync error:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
   const updateSettings = async (newSettings) => {
     setSettings(newSettings)
     
@@ -258,15 +311,11 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     console.log(`✅ Saved to localStorage for ${currentUser}:`, preferences)
     
     // 🔄 AUTO-SYNC TO BASE44
-    try {
-      const syncResult = await base44Service.syncToBase44(newSettings, currentUser)
-      if (syncResult.success) {
-        console.log(`✅ Auto-synced to Base44 via ${syncResult.method}`)
-      } else {
-        console.warn(`⚠️ Base44 sync failed: ${syncResult.message || syncResult.error}`)
-      }
-    } catch (error) {
-      console.error('❌ Base44 auto-sync error:', error)
+    const syncResult = await syncToBase44(newSettings, currentUser)
+    if (syncResult.success) {
+      console.log('✅ Auto-synced to Base44!')
+    } else {
+      console.warn('⚠️ Base44 sync failed:', syncResult.error)
     }
     
     // Add to save history
