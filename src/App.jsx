@@ -71,6 +71,7 @@ const Navigation = ({ activeTab, setActiveTab, currentUser, userEmail, userPhone
     { id: 'settings', label: 'User Settings' },
     { id: 'events', label: 'Live Events' },
     { id: 'wishlist', label: 'Wish List' },
+    { id: 'eventmanager', label: 'Event Manager' },
     { id: 'saveddata', label: 'Saved Data' },
     { id: 'userguide', label: 'User Guide' },
     { id: 'developer', label: 'Developer' }
@@ -141,6 +142,8 @@ const Content = ({ activeTab, userEmail, userPhone }) => {
       return <LiveEvents />
     case 'wishlist':
       return <WishList />
+    case 'eventmanager':
+      return <EventManager />
     case 'saveddata':
       return <SavedData />
     case 'userguide':
@@ -1166,6 +1169,609 @@ const SavedData = () => {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+const EventManager = () => {
+  const { events, settings, hideEvent, unhideEvent, hiddenEvents } = useEventContext()
+  const [selectedEvents, setSelectedEvents] = useState([])
+  const [filterStatus, setFilterStatus] = useState('all') // all, active, hidden
+  const [sortBy, setSortBy] = useState('date') // date, name, price, distance
+  const [viewMode, setViewMode] = useState('grid') // grid, list
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [eventToDelete, setEventToDelete] = useState(null)
+
+  // Get all events including hidden ones
+  const getAllEvents = () => {
+    const allEvents = [...events]
+    // Add hidden events back to the list for management
+    const hiddenEventData = hiddenEvents.map(id => {
+      const event = events.find(e => e.id === id)
+      return event ? { ...event, isHidden: true } : null
+    }).filter(Boolean)
+    
+    return allEvents.map(event => ({
+      ...event,
+      isHidden: hiddenEvents.includes(event.id)
+    }))
+  }
+
+  // Filter and sort events
+  const getFilteredEvents = () => {
+    let filtered = getAllEvents()
+
+    // Filter by status
+    if (filterStatus === 'active') {
+      filtered = filtered.filter(event => !event.isHidden)
+    } else if (filterStatus === 'hidden') {
+      filtered = filtered.filter(event => event.isHidden)
+    }
+
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(event =>
+        event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    }
+
+    // Sort events
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name)
+        case 'price':
+          const priceA = a.price === 'Free' ? 0 : parseFloat(a.price.replace(/[^0-9.]/g, '')) || 0
+          const priceB = b.price === 'Free' ? 0 : parseFloat(b.price.replace(/[^0-9.]/g, '')) || 0
+          return priceA - priceB
+        case 'distance':
+          return a.distance - b.distance
+        case 'date':
+        default:
+          return new Date(a.eventDate) - new Date(b.eventDate)
+      }
+    })
+
+    return filtered
+  }
+
+  const filteredEvents = getFilteredEvents()
+
+  const handleEventSelect = (eventId) => {
+    setSelectedEvents(prev =>
+      prev.includes(eventId)
+        ? prev.filter(id => id !== eventId)
+        : [...prev, eventId]
+    )
+  }
+
+  const handleSelectAll = () => {
+    if (selectedEvents.length === filteredEvents.length) {
+      setSelectedEvents([])
+    } else {
+      setSelectedEvents(filteredEvents.map(event => event.id))
+    }
+  }
+
+  const handleBulkHide = () => {
+    selectedEvents.forEach(eventId => {
+      const event = filteredEvents.find(e => e.id === eventId)
+      if (event && !event.isHidden) {
+        hideEvent(eventId)
+      }
+    })
+    setSelectedEvents([])
+  }
+
+  const handleBulkUnhide = () => {
+    selectedEvents.forEach(eventId => {
+      const event = filteredEvents.find(e => e.id === eventId)
+      if (event && event.isHidden) {
+        unhideEvent(eventId)
+      }
+    })
+    setSelectedEvents([])
+  }
+
+  const handleDeleteEvent = (event) => {
+    setEventToDelete(event)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = () => {
+    if (eventToDelete) {
+      // For now, we'll just hide the event permanently
+      // In a real app, this would delete from database
+      hideEvent(eventToDelete.id)
+      setShowDeleteConfirm(false)
+      setEventToDelete(null)
+    }
+  }
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const formatDistance = (distanceKm) => {
+    if (settings?.distanceUnit === 'miles') {
+      return `${(distanceKm * 0.621371).toFixed(1)} mi`
+    }
+    return `${distanceKm} km`
+  }
+
+  return (
+    <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', minHeight: '100vh', padding: '24px' }}>
+      {/* Header */}
+      <div style={{ 
+        background: 'rgba(255,255,255,0.95)', 
+        borderRadius: '16px', 
+        padding: '24px', 
+        marginBottom: '24px',
+        backdropFilter: 'blur(10px)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div>
+            <h1 style={{ 
+              margin: 0, 
+              fontSize: '28px', 
+              background: 'linear-gradient(45deg, #667eea, #764ba2)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              fontWeight: 'bold'
+            }}>
+              🚀 Event Manager Pro
+            </h1>
+            <p style={{ margin: '8px 0 0 0', color: '#666', fontSize: '16px' }}>
+              Advanced event management with hi-tech controls
+            </p>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ 
+              background: 'linear-gradient(45deg, #4facfe, #00f2fe)',
+              color: 'white',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}>
+              {filteredEvents.length} Events
+            </div>
+            <div style={{ 
+              background: selectedEvents.length > 0 ? 'linear-gradient(45deg, #fa709a, #fee140)' : '#e9ecef',
+              color: selectedEvents.length > 0 ? 'white' : '#666',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}>
+              {selectedEvents.length} Selected
+            </div>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '16px', alignItems: 'center' }}>
+          {/* Search */}
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              placeholder="🔍 Search events, tags, descriptions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: '2px solid #e9ecef',
+                borderRadius: '25px',
+                fontSize: '14px',
+                background: 'white',
+                transition: 'all 0.3s ease',
+                outline: 'none'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#667eea'}
+              onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
+            />
+          </div>
+
+          {/* Filter */}
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            style={{
+              padding: '12px 16px',
+              border: '2px solid #e9ecef',
+              borderRadius: '25px',
+              background: 'white',
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="all">All Events</option>
+            <option value="active">Active Events</option>
+            <option value="hidden">Hidden Events</option>
+          </select>
+
+          {/* Sort */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            style={{
+              padding: '12px 16px',
+              border: '2px solid #e9ecef',
+              borderRadius: '25px',
+              background: 'white',
+              fontSize: '14px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="date">Sort by Date</option>
+            <option value="name">Sort by Name</option>
+            <option value="price">Sort by Price</option>
+            <option value="distance">Sort by Distance</option>
+          </select>
+
+          {/* View Mode */}
+          <div style={{ display: 'flex', background: '#f8f9fa', borderRadius: '25px', padding: '4px' }}>
+            <button
+              onClick={() => setViewMode('grid')}
+              style={{
+                background: viewMode === 'grid' ? 'linear-gradient(45deg, #667eea, #764ba2)' : 'transparent',
+                color: viewMode === 'grid' ? 'white' : '#666',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '20px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              📊 Grid
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              style={{
+                background: viewMode === 'list' ? 'linear-gradient(45deg, #667eea, #764ba2)' : 'transparent',
+                color: viewMode === 'list' ? 'white' : '#666',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '20px',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              📋 List
+            </button>
+          </div>
+        </div>
+
+        {/* Bulk Actions */}
+        {selectedEvents.length > 0 && (
+          <div style={{ 
+            marginTop: '16px', 
+            padding: '16px', 
+            background: 'linear-gradient(45deg, #fa709a, #fee140)',
+            borderRadius: '12px',
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'center'
+          }}>
+            <span style={{ color: 'white', fontWeight: 'bold' }}>
+              {selectedEvents.length} events selected:
+            </span>
+            <button
+              onClick={handleSelectAll}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.3)',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              {selectedEvents.length === filteredEvents.length ? 'Deselect All' : 'Select All'}
+            </button>
+            <button
+              onClick={handleBulkHide}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.3)',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              🙈 Hide Selected
+            </button>
+            <button
+              onClick={handleBulkUnhide}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.3)',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              👁️ Unhide Selected
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Events Display */}
+      <div style={{ 
+        display: viewMode === 'grid' ? 'grid' : 'flex',
+        gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(400px, 1fr))' : 'none',
+        flexDirection: viewMode === 'list' ? 'column' : 'none',
+        gap: '20px'
+      }}>
+        {filteredEvents.map(event => (
+          <div
+            key={event.id}
+            style={{
+              background: event.isHidden ? 
+                'linear-gradient(135deg, rgba(108,117,125,0.1), rgba(108,117,125,0.05))' :
+                'rgba(255,255,255,0.95)',
+              borderRadius: '16px',
+              padding: '24px',
+              backdropFilter: 'blur(10px)',
+              boxShadow: selectedEvents.includes(event.id) ? 
+                '0 8px 32px rgba(102,126,234,0.3)' : 
+                '0 8px 32px rgba(0,0,0,0.1)',
+              border: selectedEvents.includes(event.id) ? 
+                '2px solid #667eea' : 
+                '2px solid transparent',
+              transition: 'all 0.3s ease',
+              cursor: 'pointer',
+              opacity: event.isHidden ? 0.6 : 1
+            }}
+            onClick={() => handleEventSelect(event.id)}
+          >
+            {/* Event Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedEvents.includes(event.id)}
+                    onChange={() => handleEventSelect(event.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ transform: 'scale(1.2)' }}
+                  />
+                  <h3 style={{ 
+                    margin: 0, 
+                    fontSize: '18px', 
+                    color: event.isHidden ? '#6c757d' : '#333',
+                    textDecoration: event.isHidden ? 'line-through' : 'none'
+                  }}>
+                    {event.name}
+                  </h3>
+                  {event.isHidden && (
+                    <span style={{
+                      background: '#6c757d',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontSize: '10px',
+                      fontWeight: 'bold'
+                    }}>
+                      HIDDEN
+                    </span>
+                  )}
+                </div>
+                
+                <div style={{ display: 'flex', gap: '16px', fontSize: '14px', color: '#666', marginBottom: '12px' }}>
+                  <span>📅 {formatDate(event.eventDate)}</span>
+                  <span>📍 {formatDistance(event.distance)}</span>
+                  <span style={{ 
+                    background: event.price === 'Free' ? '#28a745' : '#007bff',
+                    color: 'white',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px'
+                  }}>
+                    {event.price}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    window.open(event.registerUrl, '_blank')
+                  }}
+                  style={{
+                    background: 'linear-gradient(45deg, #4facfe, #00f2fe)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 12px',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  🎫 Register
+                </button>
+                
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (event.isHidden) {
+                      unhideEvent(event.id)
+                    } else {
+                      hideEvent(event.id)
+                    }
+                  }}
+                  style={{
+                    background: event.isHidden ? 
+                      'linear-gradient(45deg, #28a745, #20c997)' :
+                      'linear-gradient(45deg, #ffc107, #fd7e14)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 12px',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {event.isHidden ? '👁️ Show' : '🙈 Hide'}
+                </button>
+                
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDeleteEvent(event)
+                  }}
+                  style={{
+                    background: 'linear-gradient(45deg, #dc3545, #c82333)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 12px',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  🗑️ Delete
+                </button>
+              </div>
+            </div>
+
+            {/* Event Details */}
+            <p style={{ color: '#555', fontSize: '14px', marginBottom: '12px', lineHeight: '1.5' }}>
+              {event.description}
+            </p>
+
+            {/* Tags */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+              {event.tags.map(tag => (
+                <span
+                  key={tag}
+                  style={{
+                    background: 'linear-gradient(45deg, #667eea, #764ba2)',
+                    color: 'white',
+                    padding: '4px 12px',
+                    borderRadius: '15px',
+                    fontSize: '11px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+
+            {/* Source */}
+            <div style={{ fontSize: '12px', color: '#888' }}>
+              🌐 Source: <strong>{event.sourceSite}</strong> • 📍 {event.location}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* No Events Message */}
+      {filteredEvents.length === 0 && (
+        <div style={{
+          background: 'rgba(255,255,255,0.95)',
+          borderRadius: '16px',
+          padding: '60px',
+          textAlign: 'center',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+        }}>
+          <h3 style={{ color: '#666', fontSize: '24px', marginBottom: '16px' }}>
+            🔍 No Events Found
+          </h3>
+          <p style={{ color: '#888', fontSize: '16px' }}>
+            Try adjusting your search or filter criteria
+          </p>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 16px 64px rgba(0,0,0,0.3)'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', color: '#dc3545' }}>
+              🗑️ Delete Event
+            </h3>
+            <p style={{ margin: '0 0 24px 0', color: '#666' }}>
+              Are you sure you want to delete "<strong>{eventToDelete?.name}</strong>"? 
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  background: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                style={{
+                  background: 'linear-gradient(45deg, #dc3545, #c82333)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '20px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                Delete Forever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
