@@ -11,10 +11,8 @@ export const useEventContext = () => {
 }
 
 export const EventProvider = ({ children, currentUser = 'User1' }) => {
-  // Create user-specific localStorage keys
   const getUserKey = (key) => `kiro-${currentUser}-${key}`
   
-  // Load saved data from localStorage on startup (user-specific)
   const loadSavedData = () => {
     try {
       const saved = localStorage.getItem(getUserKey('preferences'))
@@ -189,7 +187,6 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     }
   })
 
-  // Filter events to show only future events and not hidden
   const getFutureEvents = () => {
     const now = new Date()
     return events.filter(event => 
@@ -213,7 +210,6 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
   const setWishListKeywords = (keywords) => {
     setWishListKeywordsState(keywords)
     
-    // Update localStorage when wish list changes
     const currentPrefs = localStorage.getItem(getUserKey('preferences'))
     if (currentPrefs) {
       const prefs = JSON.parse(currentPrefs)
@@ -224,65 +220,10 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     }
   }
 
-  // AUTO-SYNC TO BASE44 FUNCTION
-  const syncToBase44 = async (userSettings, currentUser) => {
-    try {
-      console.log('🔄 Auto-syncing to Base44...')
-      
-      const base44Data = {
-        user: currentUser,
-        lastUpdated: new Date().toISOString(),
-        homeAddress: userSettings.homeAddress,
-        searchRadius: userSettings.searchRadius,
-        interestTags: userSettings.interestTags,
-        monitorUrls: userSettings.monitorUrls,
-        emailAddress: userSettings.emailAddress,
-        phoneNumber: userSettings.phoneNumber,
-        notificationMethod: userSettings.notificationMethod,
-        smsForAllEvents: userSettings.smsForAllEvents,
-        smsForWishListOnly: userSettings.smsForWishListOnly,
-        urgentSmsNotifications: userSettings.urgentSmsNotifications,
-        emailDailyDigest: userSettings.emailDailyDigest,
-        emailInstantAlerts: userSettings.emailInstantAlerts,
-        emailWeeklyReport: userSettings.emailWeeklyReport,
-        distanceUnit: userSettings.distanceUnit,
-        customCategories: userSettings.customCategories,
-        freeTextSearch: userSettings.freeTextSearch,
-        wishListKeywords: wishListKeywords,
-        apiKey: 'f90220f746cb49a0bfbf914e4c78bd91',
-        webhookSecret: 'SagiEventMonitor2026'
-      }
-
-      const apiUrl = 'https://app.base44.com/apps/69573a88918e265269827fe9/editor/preview/EventMonitoring'
-      const apiKey = 'f90220f746cb49a0bfbf914e4c78bd91'
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'X-API-Key': apiKey
-        },
-        body: JSON.stringify(base44Data)
-      })
-
-      if (response.ok) {
-        console.log('✅ Successfully synced to Base44!')
-        return { success: true }
-      } else {
-        console.warn('⚠️ Base44 sync failed:', response.status)
-        return { success: false, error: `HTTP ${response.status}` }
-      }
-    } catch (error) {
-      console.error('❌ Base44 sync error:', error)
-      return { success: false, error: error.message }
-    }
-  }
-
   const updateSettings = async (newSettings) => {
+    console.log('🔄 Starting updateSettings...')
     setSettings(newSettings)
     
-    // Save to user-specific localStorage key
     const preferences = {
       lastUpdated: new Date().toISOString(),
       homeAddress: newSettings.homeAddress,
@@ -311,14 +252,27 @@ export const EventProvider = ({ children, currentUser = 'User1' }) => {
     console.log(`✅ Saved to localStorage for ${currentUser}:`, preferences)
     
     // 🔄 AUTO-SYNC TO BASE44
-    const syncResult = await syncToBase44(newSettings, currentUser)
-    if (syncResult.success) {
-      console.log('✅ Auto-synced to Base44!')
-    } else {
-      console.warn('⚠️ Base44 sync failed:', syncResult.error)
+    console.log('🔄 Auto-syncing to Base44...')
+    try {
+      const response = await fetch('https://app.base44.com/apps/69573a88918e265269827fe9/editor/preview/EventMonitoring', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer f90220f746cb49a0bfbf914e4c78bd91',
+          'X-API-Key': 'f90220f746cb49a0bfbf914e4c78bd91'
+        },
+        body: JSON.stringify(preferences)
+      })
+
+      if (response.ok) {
+        console.log('✅ Successfully synced to Base44!')
+      } else {
+        console.warn('⚠️ Base44 sync failed:', response.status, response.statusText)
+      }
+    } catch (error) {
+      console.error('❌ Base44 sync error:', error)
     }
     
-    // Add to save history
     const saveRecord = {
       id: Date.now(),
       timestamp: new Date().toLocaleString(),
