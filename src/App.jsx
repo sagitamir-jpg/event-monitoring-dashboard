@@ -619,83 +619,157 @@ const UserSettings = ({ userEmail, userPhone }) => {
 
 const LiveEvents = () => {
   const { events, settings, hideEvent } = useEventContext()
-  const [dateFilter, setDateFilter] = useState('all') // all, week, month, 3months, 6months, year
+  const [dateFilter, setDateFilter] = useState('all')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
+  const [showCustomRange, setShowCustomRange] = useState(false)
 
   const handleRegister = (url) => {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      console.error('Error opening URL:', error)
+    }
   }
 
   const handleHideEvent = (eventId, eventName) => {
-    if (window.confirm(`Hide "${eventName}" from your event list? You can unhide it later in settings.`)) {
-      hideEvent(eventId)
+    try {
+      if (window.confirm(`Hide "${eventName}" from your event list? You can unhide it later in settings.`)) {
+        hideEvent(eventId)
+      }
+    } catch (error) {
+      console.error('Error hiding event:', error)
     }
   }
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date'
+      }
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch (error) {
+      console.error('Error formatting date:', error)
+      return 'Date Error'
+    }
   }
 
   const formatDistance = (distanceKm) => {
-    if (settings.distanceUnit === 'miles') {
-      const miles = (distanceKm * 0.621371).toFixed(1)
-      return `${miles} miles`
+    try {
+      if (!distanceKm || isNaN(distanceKm)) return '0 KM'
+      
+      if (settings?.distanceUnit === 'miles') {
+        const miles = (distanceKm * 0.621371).toFixed(1)
+        return `${miles} miles`
+      }
+      return `${distanceKm} KM`
+    } catch (error) {
+      console.error('Error formatting distance:', error)
+      return '0 KM'
     }
-    return `${distanceKm} KM`
   }
 
   const getFilteredEventsByDate = () => {
-    const now = new Date()
-    const cutoffDate = new Date()
-    
-    switch (dateFilter) {
-      case 'week':
-        cutoffDate.setDate(now.getDate() + 7)
-        break
-      case 'month':
-        cutoffDate.setMonth(now.getMonth() + 1)
-        break
-      case '3months':
-        cutoffDate.setMonth(now.getMonth() + 3)
-        break
-      case '6months':
-        cutoffDate.setMonth(now.getMonth() + 6)
-        break
-      case 'year':
-        cutoffDate.setFullYear(now.getFullYear() + 1)
-        break
-      default:
-        return events // Show all events
+    try {
+      if (!events || !Array.isArray(events)) {
+        return []
+      }
+
+      const now = new Date()
+      let startDate = now
+      let endDate = new Date()
+
+      if (dateFilter === 'custom' && customStartDate && customEndDate) {
+        startDate = new Date(customStartDate)
+        endDate = new Date(customEndDate)
+        
+        // Ensure end date is not more than 1 year from start
+        const maxEndDate = new Date(startDate)
+        maxEndDate.setFullYear(maxEndDate.getFullYear() + 1)
+        if (endDate > maxEndDate) {
+          endDate = maxEndDate
+        }
+      } else {
+        switch (dateFilter) {
+          case 'week':
+            endDate.setDate(now.getDate() + 7)
+            break
+          case 'month':
+            endDate.setMonth(now.getMonth() + 1)
+            break
+          case '3months':
+            endDate.setMonth(now.getMonth() + 3)
+            break
+          case '6months':
+            endDate.setMonth(now.getMonth() + 6)
+            break
+          case 'year':
+            endDate.setFullYear(now.getFullYear() + 1)
+            break
+          default:
+            return events // Show all events
+        }
+      }
+      
+      return events.filter(event => {
+        try {
+          const eventDate = new Date(event.eventDate)
+          return eventDate >= startDate && eventDate <= endDate
+        } catch (error) {
+          console.error('Error filtering event:', error)
+          return false
+        }
+      })
+    } catch (error) {
+      console.error('Error in getFilteredEventsByDate:', error)
+      return []
     }
-    
-    return events.filter(event => {
-      const eventDate = new Date(event.eventDate)
-      return eventDate >= now && eventDate <= cutoffDate
-    })
   }
 
   const filteredEvents = getFilteredEventsByDate()
+
+  const handleDateFilterChange = (value) => {
+    setDateFilter(value)
+    setShowCustomRange(value === 'custom')
+    if (value !== 'custom') {
+      setCustomStartDate('')
+      setCustomEndDate('')
+    }
+  }
+
+  // Set default dates for custom range
+  React.useEffect(() => {
+    if (showCustomRange && !customStartDate) {
+      const today = new Date()
+      const nextMonth = new Date()
+      nextMonth.setMonth(today.getMonth() + 1)
+      
+      setCustomStartDate(today.toISOString().split('T')[0])
+      setCustomEndDate(nextMonth.toISOString().split('T')[0])
+    }
+  }, [showCustomRange, customStartDate])
 
   return (
     <div style={{ background: 'white', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
           <h2>Live Events</h2>
-          <p>Future events found within your search radius ({filteredEvents.length} of {events.length} events)</p>
+          <p>Future events found within your search radius ({filteredEvents?.length || 0} of {events?.length || 0} events)</p>
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <label style={{ fontWeight: '500', color: '#333' }}>📅 Show events:</label>
           <select 
             value={dateFilter} 
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => handleDateFilterChange(e.target.value)}
             style={{ 
               padding: '8px 12px', 
               border: '1px solid #ddd', 
@@ -710,113 +784,176 @@ const LiveEvents = () => {
             <option value="3months">Next 3 months</option>
             <option value="6months">Next 6 months</option>
             <option value="year">Next year</option>
+            <option value="custom">Custom date range</option>
           </select>
         </div>
       </div>
-      
-      <div style={{ display: 'grid', gap: '16px' }}>
-        {filteredEvents.map(event => (
-          <div key={event.id} style={{ 
-            border: '1px solid #ddd', 
-            borderRadius: '8px', 
-            padding: '20px',
-            background: '#fff'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <span style={{ 
-                    width: '12px', 
-                    height: '12px', 
-                    borderRadius: '50%', 
-                    display: 'inline-block',
-                    background: event.status === 'available' ? '#28a745' : '#dc3545'
-                  }} />
-                  <h3 style={{ margin: 0, fontSize: '18px' }}>{event.name}</h3>
-                  <span style={{ 
-                    background: event.price === 'Free' ? '#28a745' : '#007bff', 
-                    color: 'white', 
-                    padding: '2px 8px', 
-                    borderRadius: '12px', 
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
-                    {event.price}
-                  </span>
-                </div>
-                
-                <div style={{ color: '#666', fontSize: '14px', marginBottom: '8px' }}>
-                  📅 {formatDate(event.eventDate)}
-                </div>
-                
-                <div style={{ color: '#666', fontSize: '14px', marginBottom: '8px' }}>
-                  📍 {event.location} • {formatDistance(event.distance)} away
-                </div>
-                
-                <div style={{ color: '#666', fontSize: '14px', marginBottom: '8px' }}>
-                  🌐 Published on: <strong>{event.sourceSite}</strong>
-                </div>
-                
-                <p style={{ color: '#555', fontSize: '14px', margin: '8px 0' }}>
-                  {event.description}
-                </p>
-                
-                <div style={{ marginBottom: '12px' }}>
-                  {event.tags.map(tag => (
-                    <span key={tag} style={{ 
-                      background: '#e9ecef', 
-                      color: '#495057', 
-                      padding: '3px 8px', 
-                      margin: '2px 4px 2px 0', 
-                      borderRadius: '12px', 
-                      fontSize: '11px',
-                      display: 'inline-block'
-                    }}>
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  onClick={() => handleRegister(event.registerUrl)}
-                  style={{ 
-                    background: '#007bff', 
-                    color: 'white', 
-                    border: 'none', 
-                    padding: '12px 20px', 
-                    borderRadius: '6px', 
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  🎫 Register
-                </button>
-                
-                <button 
-                  onClick={() => handleHideEvent(event.id, event.name)}
-                  style={{ 
-                    background: '#dc3545', 
-                    color: 'white', 
-                    border: 'none', 
-                    padding: '12px 16px', 
-                    borderRadius: '6px', 
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
-                  }}
-                  title="Hide this event"
-                >
-                  🗑️ Hide
-                </button>
-              </div>
+
+      {/* Custom Date Range Selector */}
+      {showCustomRange && (
+        <div style={{ 
+          background: '#f8f9fa', 
+          padding: '16px', 
+          borderRadius: '8px', 
+          marginBottom: '20px',
+          border: '1px solid #dee2e6'
+        }}>
+          <h4 style={{ margin: '0 0 12px 0', color: '#495057' }}>📅 Custom Date Range (Max 1 Year)</h4>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500' }}>
+                Start Date:
+              </label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                style={{ 
+                  padding: '8px 12px', 
+                  border: '1px solid #ddd', 
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', fontWeight: '500' }}>
+                End Date:
+              </label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                min={customStartDate || new Date().toISOString().split('T')[0]}
+                max={customStartDate ? 
+                  new Date(new Date(customStartDate).setFullYear(new Date(customStartDate).getFullYear() + 1)).toISOString().split('T')[0] :
+                  new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
+                }
+                style={{ 
+                  padding: '8px 12px', 
+                  border: '1px solid #ddd', 
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <div style={{ fontSize: '12px', color: '#6c757d', maxWidth: '200px' }}>
+              💡 Select any date range up to 1 year in advance
             </div>
           </div>
-        ))}
-        
-        {filteredEvents.length === 0 && (
+        </div>
+      )}
+      
+      <div style={{ display: 'grid', gap: '16px' }}>
+        {filteredEvents && filteredEvents.length > 0 ? (
+          filteredEvents.map(event => {
+            if (!event || !event.id) return null
+            
+            return (
+              <div key={event.id} style={{ 
+                border: '1px solid #ddd', 
+                borderRadius: '8px', 
+                padding: '20px',
+                background: '#fff'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{ 
+                        width: '12px', 
+                        height: '12px', 
+                        borderRadius: '50%', 
+                        display: 'inline-block',
+                        background: event.status === 'available' ? '#28a745' : '#dc3545'
+                      }} />
+                      <h3 style={{ margin: 0, fontSize: '18px' }}>{event.name || 'Unnamed Event'}</h3>
+                      <span style={{ 
+                        background: event.price === 'Free' ? '#28a745' : '#007bff', 
+                        color: 'white', 
+                        padding: '2px 8px', 
+                        borderRadius: '12px', 
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}>
+                        {event.price || 'Price TBD'}
+                      </span>
+                    </div>
+                    
+                    <div style={{ color: '#666', fontSize: '14px', marginBottom: '8px' }}>
+                      📅 {formatDate(event.eventDate)}
+                    </div>
+                    
+                    <div style={{ color: '#666', fontSize: '14px', marginBottom: '8px' }}>
+                      📍 {event.location || 'Location TBD'} • {formatDistance(event.distance)} away
+                    </div>
+                    
+                    <div style={{ color: '#666', fontSize: '14px', marginBottom: '8px' }}>
+                      🌐 Published on: <strong>{event.sourceSite || 'Unknown'}</strong>
+                    </div>
+                    
+                    <p style={{ color: '#555', fontSize: '14px', margin: '8px 0' }}>
+                      {event.description || 'No description available'}
+                    </p>
+                    
+                    <div style={{ marginBottom: '12px' }}>
+                      {event.tags && Array.isArray(event.tags) ? (
+                        event.tags.map(tag => (
+                          <span key={tag} style={{ 
+                            background: '#e9ecef', 
+                            color: '#495057', 
+                            padding: '3px 8px', 
+                            margin: '2px 4px 2px 0', 
+                            borderRadius: '12px', 
+                            fontSize: '11px',
+                            display: 'inline-block'
+                          }}>
+                            #{tag}
+                          </span>
+                        ))
+                      ) : null}
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      onClick={() => handleRegister(event.registerUrl)}
+                      style={{ 
+                        background: '#007bff', 
+                        color: 'white', 
+                        border: 'none', 
+                        padding: '12px 20px', 
+                        borderRadius: '6px', 
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      🎫 Register
+                    </button>
+                    
+                    <button 
+                      onClick={() => handleHideEvent(event.id, event.name)}
+                      style={{ 
+                        background: '#dc3545', 
+                        color: 'white', 
+                        border: 'none', 
+                        padding: '12px 16px', 
+                        borderRadius: '6px', 
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                      }}
+                      title="Hide this event"
+                    >
+                      🗑️ Hide
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        ) : (
           <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
             <h3>No events found for selected time period</h3>
             <p>Try selecting a longer time range or check back later for new events.</p>
