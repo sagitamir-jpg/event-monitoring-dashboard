@@ -39,50 +39,104 @@ class Base44Service {
         webhookSecret: 'SagiEventMonitor2026'
       }
 
-      // Method 1: Use Base44 API endpoint
+      // 🎯 TEST MULTIPLE BASE44 ENDPOINTS
+      const base44AppUrl = 'https://event-scout-69827fe9.base44.app'
+      const testEndpoints = [
+        `${base44AppUrl}/api/update`,
+        `${base44AppUrl}/webhook`,
+        `${base44AppUrl}/data`,
+        `${base44AppUrl}/api/data`,
+        `${base44AppUrl}/sync`,
+        `${base44AppUrl}/`
+      ]
+
+      console.log('🔍 Testing Base44 endpoints...')
+      
+      for (const endpoint of testEndpoints) {
+        try {
+          console.log(`🧪 Testing: ${endpoint}`)
+          
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer f90220f746cb49a0bfbf914e4c78bd91`,
+              'X-API-Key': 'f90220f746cb49a0bfbf914e4c78bd91'
+            },
+            body: JSON.stringify(base44Data)
+          })
+
+          console.log(`📊 ${endpoint} → Status: ${response.status}`)
+          
+          if (response.ok) {
+            console.log(`✅ SUCCESS! Base44 endpoint found: ${endpoint}`)
+            return { 
+              success: true, 
+              method: 'Base44 API',
+              endpoint: endpoint,
+              status: response.status
+            }
+          }
+          
+          // Log response for debugging
+          const responseText = await response.text()
+          console.log(`📝 Response from ${endpoint}:`, responseText.substring(0, 200))
+          
+        } catch (error) {
+          console.log(`❌ ${endpoint} failed:`, error.message)
+        }
+      }
+
+      // Method 2: Use environment variables if set
       if (this.apiEndpoint && this.apiKey) {
-        const response = await fetch(this.apiEndpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`,
-            'X-API-Key': this.apiKey
-          },
-          body: JSON.stringify(base44Data)
-        })
+        try {
+          const response = await fetch(this.apiEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`,
+              'X-API-Key': this.apiKey
+            },
+            body: JSON.stringify(base44Data)
+          })
 
-        if (response.ok) {
-          console.log('✅ Successfully synced to Base44 via API')
-          return { success: true, method: 'API' }
-        } else {
-          throw new Error(`Base44 API error: ${response.status}`)
+          if (response.ok) {
+            console.log('✅ Successfully synced to Base44 via configured API')
+            return { success: true, method: 'Configured API' }
+          }
+        } catch (error) {
+          console.log('❌ Configured API failed:', error.message)
         }
       }
 
-      // Method 2: Use webhook URL
+      // Method 3: Use webhook URL if set
       if (this.webhookUrl) {
-        const response = await fetch(this.webhookUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(base44Data)
-        })
+        try {
+          const response = await fetch(this.webhookUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(base44Data)
+          })
 
-        if (response.ok) {
-          console.log('✅ Successfully synced to Base44 via webhook')
-          return { success: true, method: 'Webhook' }
-        } else {
-          throw new Error(`Base44 webhook error: ${response.status}`)
+          if (response.ok) {
+            console.log('✅ Successfully synced to Base44 via webhook')
+            return { success: true, method: 'Webhook' }
+          }
+        } catch (error) {
+          console.log('❌ Webhook failed:', error.message)
         }
       }
 
-      // Method 3: Fallback - show manual copy instructions
-      console.warn('⚠️ No Base44 API configured - manual copy required')
+      // Method 4: Fallback - show manual copy instructions
+      console.warn('⚠️ No working Base44 endpoint found - manual copy required')
+      console.log('💡 Check F12 console above to see which endpoints were tested')
       return { 
         success: false, 
         method: 'Manual',
-        message: 'Please copy JSON from Developer tab to Base44 manually'
+        message: 'No working Base44 API endpoint found. Please copy JSON from Developer tab to Base44 manually.',
+        testedEndpoints: testEndpoints
       }
 
     } catch (error) {
